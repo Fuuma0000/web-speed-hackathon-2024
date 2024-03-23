@@ -203,7 +203,6 @@ class AuthorRepository implements AuthorRepositoryInterface {
     try {
       await getDatabase().transaction(async (tx) => {
         await tx.delete(author).where(eq(author.id, options.params.authorId)).execute();
-
         const deleteBookRes = await tx
           .delete(book)
           .where(eq(book.authorId, options.params.authorId))
@@ -211,17 +210,9 @@ class AuthorRepository implements AuthorRepositoryInterface {
             bookId: book.id,
           })
           .execute();
-
-        // バルク削除用のプロミス配列
-        const deletePromises = [];
-
-        // 特徴、ランキング、エピソードを削除するためのプロミスを生成
         for (const book of deleteBookRes) {
-          deletePromises.push(
-            tx.delete(feature).where(eq(feature.bookId, book.bookId)).execute(),
-            tx.delete(ranking).where(eq(ranking.bookId, book.bookId)).execute(),
-          );
-
+          await tx.delete(feature).where(eq(feature.bookId, book.bookId)).execute();
+          await tx.delete(ranking).where(eq(ranking.bookId, book.bookId)).execute();
           const deleteEpisodeRes = await tx
             .delete(episode)
             .where(eq(episode.bookId, book.bookId))
@@ -229,15 +220,10 @@ class AuthorRepository implements AuthorRepositoryInterface {
               episodeId: episode.id,
             })
             .execute();
-
-          // エピソードページの削除をプロミス配列に追加
           for (const episode of deleteEpisodeRes) {
-            deletePromises.push(tx.delete(episodePage).where(eq(episodePage.episodeId, episode.episodeId)).execute());
+            await tx.delete(episodePage).where(eq(episodePage.episodeId, episode.episodeId)).execute();
           }
         }
-
-        // すべての削除操作を並列で実行
-        await Promise.all(deletePromises);
       });
 
       return ok({});
